@@ -1,18 +1,13 @@
-# ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
+# ----------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС -----------------------
 import os
-
-os.environ["TORCH_HOME"] = r"D:\Institute\Diploma_v3\models"
-
-import cv2
-import time
-import threading
-
-import torch
-from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
-from torchvision.transforms.functional import to_tensor
+from pathlib import Path
 
 # ----------------------- КОНСТАНТЫ -----------------------
-VIDEO_DIR = "data/video_clips/"
+PROJECT_ROOT = Path(__file__).resolve().parents[0]
+MODELS_ROOT = PROJECT_ROOT / "models"
+VIDEO_DIR = PROJECT_ROOT / 'data' / "video_clips"
+
+os.environ["TORCH_HOME"] = str(MODELS_ROOT)
 
 COCO = {
     1: "person",
@@ -24,7 +19,18 @@ COCO = {
 
 SCORE_THRESH = 0.8
 EVERY = 4
-MAX_STALE_SEC = 1.0 # Сколько секунд можно рисовать "старые" детекции, если инференс не успевает
+MAX_STALE_SEC = 1.0
+
+
+# ----------------------- ИМПОРТ ОСТАЛЬНЫХ БИБЛИОТЕК -----------------------
+import cv2
+import time
+import threading
+
+import torch
+from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
+from torchvision.transforms.functional import to_tensor
+
 
 # ----------------------- МЕТОДЫ -----------------------
 def predict(model, frame_bgr, device):
@@ -172,7 +178,7 @@ def main(path):
 # ----------------------- ЗАПУСК -----------------------
 if __name__ == "__main__":
     vid_name = input('Введите название клипа (пример: vid_001_0000 / vid_002_0002): ')
-    clip_path = VIDEO_DIR + f'{vid_name}.mp4'
+    clip_path = str(VIDEO_DIR) + f'/{vid_name}.mp4'
     main(path=clip_path)
 
 
