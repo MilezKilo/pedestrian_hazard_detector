@@ -1,7 +1,7 @@
 /data/video_clips/
 /data/video_raw/
 
-/models/
+/detector/models/
 
 __pycache__/
 

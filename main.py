@@ -1,14 +1,20 @@
 # ----------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС -----------------------
 import os
-from pathlib import Path
+from utils.paths import MODELS_DIR, CLIPS_DIR
 
-# ----------------------- КОНСТАНТЫ -----------------------
-PROJECT_ROOT = Path(__file__).resolve().parents[0]
-MODELS_ROOT = PROJECT_ROOT / "models"
-VIDEO_DIR = PROJECT_ROOT / 'data' / "video_clips"
+os.environ["TORCH_HOME"] = str(MODELS_DIR) # Дефолтная директория для моделей
 
-os.environ["TORCH_HOME"] = str(MODELS_ROOT)
 
+# ----------------------- ИМПОРТ ОСТАЛЬНЫХ БИБЛИОТЕК -----------------------
+import cv2
+import time
+import threading
+
+import torch
+from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
+from torchvision.transforms.functional import to_tensor
+
+# # ----------------------- КОНСТАНТЫ -----------------------
 COCO = {
     1: "person",
     3: "car",
@@ -22,17 +28,7 @@ EVERY = 4
 MAX_STALE_SEC = 1.0
 
 
-# ----------------------- ИМПОРТ ОСТАЛЬНЫХ БИБЛИОТЕК -----------------------
-import cv2
-import time
-import threading
-
-import torch
-from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
-from torchvision.transforms.functional import to_tensor
-
-
-# ----------------------- МЕТОДЫ -----------------------
+# ----------------------- ФУНКЦИИ -----------------------
 def predict(model, frame_bgr, device):
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     x = to_tensor(frame_rgb).to(device)
@@ -178,7 +174,7 @@ def main(path):
 # ----------------------- ЗАПУСК -----------------------
 if __name__ == "__main__":
     vid_name = input('Введите название клипа (пример: vid_001_0000 / vid_002_0002): ')
-    clip_path = str(VIDEO_DIR) + f'/{vid_name}.mp4'
+    clip_path = str(CLIPS_DIR) + f'/{vid_name}.mp4'
     main(path=clip_path)
 
 

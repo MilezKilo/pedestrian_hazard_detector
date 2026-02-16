@@ -3,14 +3,10 @@ import json
 from pathlib import Path
 import cv2
 import numpy as np
+from utils.paths import ROIS_DIR, CLIPS_DIR
 
-# -------------------- КОНСТАНТЫ --------------------
-# Корневая директория проекта и папок, а так же с клипами и ROI
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CLIPS_DIR = PROJECT_ROOT / "data" / "video_clips"
-ROIS_DIR = PROJECT_ROOT / "data" / "rois"
 
-# -------------------- МЕТОДЫ РИСОВАНИЯ И СОХРАНЕНИЯ REGION OF INTEREST (ROI) --------------------
+# -------------------- ФУНКЦИИ РИСОВАНИЯ И СОХРАНЕНИЯ REGION OF INTEREST (ROI) --------------------
 # Рисование линии (Если точек 2 и больше рисует линию)
 def draw_polygon(img, pts, color, closed=False, thickness=2):
     """
@@ -89,8 +85,9 @@ def redraw_frame(frame, help_text, mode, crosswalk_pts, risk_pts):
 def drawing():
     ROIS_DIR.mkdir(parents=True, exist_ok=True)
 
-    clip_name = input(f"Название клипа, например vid_001_0000:\n> ").strip()
+    clip_name = input(f"Название клипа, например vid_001_0000: ").strip()
     clip_path = CLIPS_DIR / f"{clip_name}.mp4"
+    print(clip_path)
 
     # Если файл не найден выходим из цикла
     if not clip_path.exists():
@@ -124,7 +121,7 @@ def drawing():
     help_text = [
         "LMB: add point",
         "BACKSPACE: undo last point",
-        "TAB: switch polygon (crosswalk/risk)",
+        "TAB: switch polygon type (crosswalk/risk)",
         "S: save JSON",
         "ESC/Q: exit without saving"
     ]

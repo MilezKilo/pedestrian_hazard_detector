@@ -1,16 +1,11 @@
 from moviepy import VideoFileClip
-from pathlib import Path
+from utils.paths import RAW_VID_DIR, CLIPS_DIR
 
 # -------------------- КОНСТАНТЫ --------------------
-# Корневая директория проекта и папок, а так же с клипами
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CLIPS_DIR = PROJECT_ROOT / "data" / "video_clips"
-RAW_VID_DIR = PROJECT_ROOT / 'data' / 'video_raw'
-
 CLIP_LENGTH = 20
 
 # Нарезает видео на клипы по CLIP_LENGTH сек
-def cut_video(video_path: Path):
+def cut_video(video_path):
     """
     :param video_path: Путь к видео
     :return: None
