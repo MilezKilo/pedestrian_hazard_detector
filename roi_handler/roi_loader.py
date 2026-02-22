@@ -33,13 +33,21 @@ def point_in_polygon(polygon: ndarray, x: int, y: int) -> bool:
     return pointPolygonTest(polygon, (float(x), float(y)), False) >= 0
 
 
+
+
+
+
+
+
+# DEPRICATED
+
 # Возвращает центр ББ
-def bbox_center(x1, y1, x2, y2):
-    """
-    :param x1: Левый верхний угол
-    :param y1:
-    :param x2: Правый нижний угол
-    :param y2:
-    :return: Центр bounding box'a
-    """
-    return int((x1 + x2) / 2), int((y1 + y2) / 2)
+# def bbox_center(x1, y1, x2, y2):
+#     """
+#     :param x1: Левый верхний угол
+#     :param y1:
+#     :param x2: Правый нижний угол
+#     :param y2:
+#     :return: Центр bounding box'a
+#     """
+#     return int((x1 + x2) / 2), int((y1 + y2) / 2)
