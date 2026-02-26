@@ -73,3 +73,5 @@ class TorchDetector:
             label = COCO.get(cid, str(cid))
             dets.append(Detection(cid, label, float(sc), (x1, y1, x2, y2)))
         return dets
+
+

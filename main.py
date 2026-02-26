@@ -1,6 +1,6 @@
 # ----------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС -----------------------
 import os
-from utils.paths import MODELS_DIR, ROIS_DIR, CLIPS_DIR, paths_check
+from utils.paths import MODELS_DIR, ROIS_DIR, CLIPS_DIR, roi_check, clip_check
 
 os.environ["TORCH_HOME"] = str(MODELS_DIR) # Дефолтная директория для моделей
 
@@ -11,7 +11,7 @@ import time
 import threading
 
 from roi_handler.roi_loader import load_roi
-from utils.drawing_handler import draw_polygons
+from utils.drawing_handler import show_roi_polygons, draw
 
 import torch
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
@@ -53,14 +53,6 @@ def predict(model, frame_bgr, device):
     return detections
 
 
-def draw(frame, det):
-    label, score, (x1, y1, x2, y2) = det
-    color = (0, 255, 0) if label == "person" else (0, 0, 255)
-    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-    cv2.putText(frame, f"{label}:{score:.2f}", (x1, max(20, y1 - 7)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-
 def _infer_loop(model, device, shared, lock, stop_event):
     """Поток, который делает инференс, когда главный поток положил новый кадр."""
     last_seen_req_id = -1
@@ -87,12 +79,8 @@ def _infer_loop(model, device, shared, lock, stop_event):
             last_seen_req_id = req_id
 
 
-# Функция проверки путей (Вынес за мейн функцию для расчистки)
 
-
-
-
-def main(roi_dir, clips_dir, clip_id):
+def main(roi_dir, clips_dir, clip_name):
     # ---------------------------------- МОДЕЛИ И НАСТРОЙКА ----------------------------------
     # Настройка девайса
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -104,7 +92,8 @@ def main(roi_dir, clips_dir, clip_id):
     model.to(device).eval()
 
     # ---------------------------------- ПРОВЕРКА ПУТЕЙ ----------------------------------
-    clip_path, roi_path = paths_check(roi_dir=roi_dir, clips_dir=clips_dir, clip_id=clip_id)
+    clip_path = clip_check(clips_dir=clips_dir, clip_name=clip_name)
+    roi_path = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
 
     # ---------------------------------- ЛОКАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------------------------------
     show_roi = False # Флаг показа ROI
@@ -180,13 +169,13 @@ def main(roi_dir, clips_dir, clip_id):
 
         # Флаг рисовать ли ROI
         if show_roi:
-            draw_polygons(frame=vis, crosswalk_poly=crosswalk, risk_poly=risk)
+            show_roi_polygons(frame=vis, crosswalks=crosswalk, risks=risk)
 
         cv2.imshow("Detections", vis)
 
         # Клавиши управления. q - выход, r - отрисовка ROI, space - пауза
         key = cv2.waitKey(30 if pause else delay_ms) & 0xFF
-        if key == ord('q'):
+        if key in [27, ord('q'), ord('Q')]:
             break
 
         if key == ord('r'):
@@ -205,8 +194,8 @@ def main(roi_dir, clips_dir, clip_id):
 
 # ----------------------- ЗАПУСК -----------------------
 if __name__ == "__main__":
-    val = input('Введите название клипа (пример: vid_001_0000 / vid_002_0002): ')
-    main(roi_dir=ROIS_DIR, clips_dir=CLIPS_DIR, clip_id=val)
+    name = input('Введите название клипа (пример: vid_001_0000 / vid_002_0002): ')
+    main(roi_dir=ROIS_DIR, clips_dir=CLIPS_DIR, clip_name=name)
 
 
 # DEPRICATED
@@ -217,3 +206,17 @@ if __name__ == "__main__":
 #     show_cnt = 0
 #     show_t0 = now
 # cv2.putText(vis, f"show_fps: {show_fps:.1f} | EVERY: {EVERY}",(20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+#
+# def draw(frame, det):
+#     """
+#     Рисует на кадре 1 детекцию
+#
+#     :param frame: Кадр для отрисовки
+#     :param det:
+#     :return:
+#     """
+#     label, score, (x1, y1, x2, y2) = det
+#     color = (0, 255, 0) if label == "person" else (0, 0, 255)
+#     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+#     cv2.putText(frame, f"{label}:{score:.2f}", (x1, max(20, y1 - 7)),
+#                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
