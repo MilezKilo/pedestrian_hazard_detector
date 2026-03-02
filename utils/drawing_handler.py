@@ -1,8 +1,16 @@
+# ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
 import cv2
 
-
+# ----------------------- ФУНКЦИИ -----------------------
 def show_roi_polygons(frame, crosswalks, risks):
-    # crosswalks и risks — списки полигонов (каждый poly: (N,1,2))
+    """
+    Функция отрисовки областей интересов
+
+    :param frame: Кадр для отрисовки
+    :param crosswalks: Области пешеходных пероеходов
+    :param risks: Области опасных зон
+    """
+    # crosswalks и risks — списки полигонов (каждый полигон: (N,1,2))
     for poly in crosswalks:
         cv2.polylines(frame, [poly], True, (0, 255, 0), 2)
 

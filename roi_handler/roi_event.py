@@ -1,26 +1,70 @@
-from roi_handler.roi_loader import point_in_polygon
+# -------------------- БИБЛИОТЕКИ --------------------
+from cv2 import pointPolygonTest
+import numpy as np
+from dataclasses import dataclass, field
+
 
 # Список классов, который детектится как "Транспорт"
 VEHICLE_LABELS = {"car", "motorcycle", "bus", "truck"}
 
-# Метчинг только внутри категорий
+
 def category_of_label(label):
+    """
+    Метчинг только внутри категорий транспорта
+
+    :param label: Лейбл найденного объекта
+    """
     if label == "person":
         return "person"
     if label in VEHICLE_LABELS:
         return "vehicle"
     return label
 
-# Определение где находится объект относительно ROI
+
+def point_in_polygon(polygon: np.ndarray, x: int, y: int) -> bool:
+    """
+    Возвращает внутри полигона точка, или нет:
+
+    - больше 0, то точка внутри полигона
+
+    - равно 0, на границе полигона
+
+    - меньше 0, снаружи полигона
+
+    """
+    return pointPolygonTest(polygon, (float(x), float(y)), False) >= 0
+
+
 def anchor_point_xyxy(bbox_xyxy, mode="bottom_center"):
+    """
+    Определение где находится объект относительно ROI
+
+    :param bbox_xyxy: Точки ББ
+    :param mode: Точка к которой идет привязка (Низ центр\центр)
+    """
     x1, y1, x2, y2 = bbox_xyxy
     if mode == "center":
         return int((x1 + x2) / 2), int((y1 + y2) / 2)
     return int((x1 + x2) / 2), int(y2)
 
-# Считает IoU двух ББ
+
+
+def first_polygon_index(polygons, x, y):
+    """
+    Возвращает индекс первого полигона, в который попала точка (x,y),
+    или -1 если ни в один не попала.
+
+    """
+    for i, poly in enumerate(polygons):
+        if point_in_polygon(poly, x, y):
+            return i
+    return -1
+
+
 def iou_xyxy(a, b):
     """
+    Считает IoU двух ББ
+
     :param a: Первый BB
     :param b: Второй BB
     :return: Возвращает число между 1 и 0 (То насколько 2 ББ перекрываются)
@@ -43,23 +87,31 @@ def iou_xyxy(a, b):
     return (inter / union) if union > 0 else 0.0
 
 
-#
+@dataclass
 class TrackState:
-    def __init__(self, track_id, category, bbox_xyxy, last_seen_frame):
-        self.track_id = track_id
-        self.category = category
-        self.bbox_xyxy = bbox_xyxy
-        self.last_seen_frame = last_seen_frame
-        self.prev_in_risk = False
-        self.prev_in_crosswalk = False
+    """
+    Память прошлого кадра
+    """
+    track_id: int
+    category: str
+    bbox_xyxy: tuple
+    last_seen_frame: int
+    prev_in_risk = False
+    prev_in_crosswalk = False
 
 
 class TrackedDetection:
+    """
+    Хранение исходной детекции
+    """
     def __init__(self, track_id, det, category, anchor_xy):
         self.track_id = track_id
         self.det = det
         self.category = category
-        self.anchor_xy = anchor_xy
+        # self.anchor_xy = anchor_xy
+
+        self.crosswalk_idx = -1
+        self.risk_idx = -1
 
         self.in_crosswalk = False
         self.in_risk = False
@@ -69,24 +121,19 @@ class TrackedDetection:
         self.entered_crosswalk = False
 
 
+@dataclass
 class FrameEvents:
-    def __init__(
-        self,
-        frame_idx,
-        ped_on_crosswalk,
-        ped_on_road,
-        ped_entered_road_ids,
-        vehicle_present,
-        danger_same_zone,
-        danger_ped_crosswalk_vehicle_risk,
-    ):
-        self.frame_idx = frame_idx
-        self.ped_on_crosswalk = ped_on_crosswalk
-        self.ped_on_road = ped_on_road
-        self.ped_entered_road_ids = ped_entered_road_ids
-        self.vehicle_present = vehicle_present
-        self.danger_same_zone = danger_same_zone
-        self.danger_ped_crosswalk_vehicle_risk = danger_ped_crosswalk_vehicle_risk
+    """
+    Результат детекции по кадру
+    """
+    frame_idx : int
+    ped_on_crosswalk: bool # Есть ли человек на пешеходном переходе
+    ped_on_road: bool # Есть ли человек на дороге
+    ped_entered_road_ids: list = field(default_factory=list) # какие track_id вошли в risk на этом кадре
+    vehicle_present: bool = False # Есть ли транспорт в кадре
+    danger_same_zone: bool = False # Человек и транспорт в одной из зон одновременно
+    danger_ped_crosswalk_vehicle_risk: bool = False #
+
 
 
 class SimpleIoUTracker:
@@ -176,17 +223,29 @@ class SimpleIoUTracker:
                     track_id=tid,
                     det=d,
                     category=category_of_label(d.label),
-                    anchor_xy=anchor_point_xyxy(d.bbox_xyxy, mode="bottom_center"),
+                    # anchor_xy=anchor_point_xyxy(d.bbox_xyxy, mode="bottom_center"),
                 )
             )
         return out
 
 
-def annotate_zones(tracked, crosswalk_poly, risk_poly):
+def annotate_zones(tracked, crosswalks, risks):
+    """
+    :param tracked
+    :param crosswalks: список полигонов (каждый poly: (N,1,2))
+    :param risks: список полигонов
+    """
     for t in tracked:
         x, y = t.anchor_xy
-        t.in_crosswalk = point_in_polygon(crosswalk_poly, x, y)
-        t.in_risk = point_in_polygon(risk_poly, x, y)
+
+        cw_i = first_polygon_index(crosswalks, x, y)
+        rk_i = first_polygon_index(risks, x, y)
+
+        t.crosswalk_idx = cw_i
+        t.risk_idx = rk_i
+
+        t.in_crosswalk = (cw_i != -1)
+        t.in_risk = (rk_i != -1)
 
         if t.in_crosswalk:
             t.zone = "crosswalk"

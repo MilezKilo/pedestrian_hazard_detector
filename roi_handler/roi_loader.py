@@ -1,7 +1,6 @@
 # ---------------------------------------- БИБЛИОТЕКИ ----------------------------------------
 from json import load as json_load
 from pathlib import Path
-from cv2 import pointPolygonTest
 import numpy as np
 
 
@@ -36,22 +35,8 @@ def load_roi(roi_json_path: Path) -> dict:
     crosswalks = [poly_to_cv(p) for p in polygons["crosswalks"]]
     risks = [poly_to_cv(p) for p in polygons["risks"]]
 
-    return {"crosswalk": crosswalks, "risk": risks}
+    return {"crosswalks": crosswalks, "risks": risks}
 
-
-# Возвращает внутри полигона точка, или нет
-def point_in_polygon(polygon: np.ndarray, x: int, y: int) -> bool:
-    """
-    Если возвращаемое число:
-
-    - больше 0, то точка внутри полигона
-
-    - равно 0, на границе полигона
-
-    - меньше 0, снаружи полигона
-
-    """
-    return pointPolygonTest(polygon, (float(x), float(y)), False) >= 0
 
 
 

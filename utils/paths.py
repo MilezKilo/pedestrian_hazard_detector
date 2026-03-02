@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 
+# ----------------------- КОНСТАНТЫ -----------------------
 # Корневая директория проекта
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

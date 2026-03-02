@@ -105,8 +105,15 @@ def redraw_frame(frame, help_text, mode, crosswalk_polys, risk_polys, cur_pts):
     cv2.imshow("ROI Tool", img)
 
 
-# Мейн функцияф рисования
+
 def drawing(roi_dir, clips_dir, clip_name):
+    """
+    Мейн функция рисования
+
+    :param roi_dir: Директория с областями интересов
+    :param clips_dir: Директория с клипами
+    :param clip_name: На котором хотим рисовать области интересов
+    """
     # ---------------------------------- ПРОВЕРКА ПУТЕЙ ----------------------------------
     # Получаем id клипа и директорию для сохранения json данных
     clip_path = clip_check(clips_dir=clips_dir, clip_name=clip_name)

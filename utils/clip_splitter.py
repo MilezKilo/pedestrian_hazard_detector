@@ -1,6 +1,6 @@
+# ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
 from moviepy import VideoFileClip
 from utils.paths import RAW_VID_DIR, CLIPS_DIR
-
 
 # -------------------- ФУНКЦИИ --------------------
 def cut_video(video_path, clips_path, clip_length: int = 20):
