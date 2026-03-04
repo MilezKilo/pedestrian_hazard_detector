@@ -101,23 +101,23 @@ class TrackState:
 
 
 class TrackedDetection:
-    """
-    Хранение исходной детекции
-    """
-    def __init__(self, track_id, det, category, anchor_xy):
-        self.track_id = track_id
-        self.det = det
-        self.category = category
-        # self.anchor_xy = anchor_xy
+    """Хранение исходной детекции с привязкой к треку"""
+    def __init__(self, track_id, det, category):
+        self.track_id  = track_id
+        self.det       = det
+        self.category  = category
+
+        # Якорная точка (низ-центр бокса, можно поменять на центр например)
+        self.anchor_xy  = anchor_point_xyxy(det.bbox_xyxy, mode="bottom_center")
 
         self.crosswalk_idx = -1
-        self.risk_idx = -1
+        self.risk_idx      = -1
 
-        self.in_crosswalk = False
-        self.in_risk = False
-        self.zone = "none"  # crosswalk | road | none
+        self.in_crosswalk  = False
+        self.in_risk       = False
+        self.zone          = "none"   # "crosswalk" | "road" | "none"
 
-        self.entered_risk = False
+        self.entered_risk      = False
         self.entered_crosswalk = False
 
 
@@ -223,7 +223,6 @@ class SimpleIoUTracker:
                     track_id=tid,
                     det=d,
                     category=category_of_label(d.label),
-                    # anchor_xy=anchor_point_xyxy(d.bbox_xyxy, mode="bottom_center"),
                 )
             )
         return out
@@ -294,3 +293,29 @@ def compute_frame_events(frame_idx, tracked):
         danger_same_zone=danger_same_zone,
         danger_ped_crosswalk_vehicle_risk=danger_ped_crosswalk_vehicle_risk,
     )
+
+
+# OLD CODE (DEPRICATED)
+# class TrackedDetection:
+#     """
+#     Хранение исходной детекции
+#     """
+#     def __init__(self, track_id, det, category, anchor_xy):
+#         self.track_id = track_id
+#         self.det = det
+#         self.category = category
+#         self.anchor_xy = anchor_xy
+#
+#         # Якорная точка (низ-центр бокса)
+#         x1, y1, x2, y2 = det.bbox_xyxy
+#         self.anchor_xy = ((x1 + x2) // 2, y2)
+#
+#         self.crosswalk_idx = -1
+#         self.risk_idx = -1
+#
+#         self.in_crosswalk = False
+#         self.in_risk = False
+#         self.zone = "none"  # crosswalk | road | none
+#
+#         self.entered_risk = False
+#         self.entered_crosswalk = False

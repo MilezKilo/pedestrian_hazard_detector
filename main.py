@@ -1,20 +1,28 @@
-# ----------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС -----------------------
+# ---------------------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС ----------------------------------
 import os
 from utils.paths import MODELS_DIR, ROIS_DIR, CLIPS_DIR, roi_check, clip_check
 
-os.environ["TORCH_HOME"] = str(MODELS_DIR) # Дефолтная директория для моделей
+os.environ["TORCH_HOME"] = str(MODELS_DIR)
 
-# ----------------------- ОСТАЛЬНЫЕ БИБЛИОТЕКИ -----------------------
+# ---------------------------------- ОСТАЛЬНЫЕ БИБЛИОТЕКИ ----------------------------------
+import time
 import threading
 
-from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
+import cv2
 import torch
+from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
 
 from roi_handler.roi_loader import load_roi
-from utils.drawing_handler import show_roi_polygons, draw
-from detector.detection_methods import *
+from roi_handler.roi_event import (
+    SimpleIoUTracker,
+    annotate_zones,
+    update_track_zone_state,
+    compute_frame_events,
+)
+from utils.drawing_handler import show_roi_polygons, draw_tracked, draw_events
+from detector.detection_methods import infer_loop
 
-# ----------------------- КОНСТАНТЫ -----------------------
+# ---------------------------------- КОНСТАНТЫ ----------------------------------
 COCO = {
     1: "person",
     3: "car",
@@ -24,11 +32,11 @@ COCO = {
 }
 
 SCORE_THRESH = 0.8
-EVERY = 4
-MAX_STALE_SEC = 1.0
+EVERY        = 4          # Инференс каждые N кадров
+MAX_STALE_SEC = 1.0       # Максимальное время жизни старых детекций
 
 
-# ----------------------- MAIN функция -----------------------
+# ---------------------------------- MAIN ----------------------------------
 def main(roi_dir, clips_dir, clip_name):
 
     # ---------------------------------- МОДЕЛЬ И НАСТРОЙКА ----------------------------------
@@ -38,48 +46,52 @@ def main(roi_dir, clips_dir, clip_name):
     model = fasterrcnn_resnet50_fpn_v2(weights="DEFAULT")
     model.to(device).eval()
 
-# ---------------------------------- ПРОВЕРКА ПУТЕЙ И ЛОКАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------------------------------
+    # ---------------------------------- ПРОВЕРКА ПУТЕЙ ----------------------------------
     clip_path = clip_check(clips_dir=clips_dir, clip_name=clip_name)
-    roi_path = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
+    roi_path  = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
+    roi_data  = load_roi(roi_json_path=roi_path)
 
-    roi_data = load_roi(roi_json_path=roi_path)
-
-    # Если существует, то создаем переменные с координатами пешеходного перехода (crosswalk) и дороги (risk)
     crosswalks = roi_data["crosswalks"]
-    risks = roi_data["risks"]
+    risks      = roi_data["risks"]
 
-    show_roi = False
-    pause = False
-    frozen = None
+    # ---------------------------------- ТРЕКЕР ----------------------------------
+    tracker = SimpleIoUTracker(iou_thresh=0.30, max_age=25)
 
-    frame_idx = 0
-    frame = None
-
-# ---------------------------------- ПОТОК ИНФЕРЕНСА ----------------------------------
+    # ---------------------------------- ОБЩИЙ СОСТОЯНИЕ ПОТОКОВ ----------------------------------
     shared = {
-        "req_id": -1,
-        "req_frame": None,
-        "detections": [],
+        "req_id":        -1,
+        "req_frame":     None,
+        "detections":    [],
         "detections_ts": 0.0,
         "detections_id": -1,
     }
-    lock = threading.Lock()
-    stop_event = threading.Event()
+    lock        = threading.Lock()
+    stop_event  = threading.Event()
 
-    t = threading.Thread(target=infer_loop, args=(model, device, shared, lock, stop_event, COCO, SCORE_THRESH), daemon=True)
+    t = threading.Thread(
+        target=infer_loop,
+        args=(model, device, shared, lock, stop_event, COCO, SCORE_THRESH),
+        daemon=True,
+    )
     t.start()
 
-# ---------------------------------- РАБОТА С ВИДЕО ----------------------------------
-    cap = cv2.VideoCapture(clip_path) # ВОЗМОЖНО ЛУЧШЕ ОТКРЫВАТЬ ЧЕРЕЗ СТРОКУ?
+    # ---------------------------------- РАБОТА С ВИДЕО ----------------------------------
+    cap = cv2.VideoCapture(clip_path)
     if not cap.isOpened():
         stop_event.set()
-        raise RuntimeError("Не могу открыть видео: {}".format(clip_path))
+        raise RuntimeError(f"Не могу открыть видео: {clip_path}")
 
-    # Синхронизация показа по FPS, чтобы видео не "ускорялось"
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps      = cap.get(cv2.CAP_PROP_FPS)
     delay_ms = int(1000 / fps) if fps and fps > 1 else 16
 
+    show_roi  = False
+    pause     = False
+    frozen    = None
+    frame_idx = 0
+    frame     = None
+    last_events = None  # Последние события — показываем пока не устарели
 
+    # ---------------------------------- ГЛАВНЫЙ ЦИКЛ ----------------------------------
     while True:
         if not pause:
             ok, frame = cap.read()
@@ -87,12 +99,13 @@ def main(roi_dir, clips_dir, clip_name):
                 break
             frame_idx += 1
 
+            # Каждые EVERY кадров — отправляем на инференс
             if frame_idx % EVERY == 0:
                 with lock:
-                    shared["req_id"] = frame_idx
+                    shared["req_id"]    = frame_idx
                     shared["req_frame"] = frame.copy()
 
-            base = frame
+            base   = frame
             frozen = None
         else:
             if frozen is None and frame is not None:
@@ -103,28 +116,43 @@ def main(roi_dir, clips_dir, clip_name):
             break
 
         vis = base.copy()
-
         now = time.monotonic()
+
         with lock:
             detections = list(shared.get("detections", []))
-            det_ts = float(shared.get("detections_ts", 0.0))
+            det_ts     = float(shared.get("detections_ts", 0.0))
 
+        # ---------------------------------- ТРЕКИНГ И СОБЫТИЯ ----------------------------------
         if detections and (pause or (now - det_ts) <= MAX_STALE_SEC):
-            # Фильтр по ROI
-            dets_roi = [d for d in detections if det_in_roi(d, crosswalks, risks)]
 
-            for d in dets_roi:
-                draw(vis, d)
+            # Обновляем трекер — получаем TrackedDetection для каждого объекта
+            tracked = tracker.update(detections, frame_idx)
 
+            # Проставляем зоны каждому объекту
+            annotate_zones(tracked, crosswalks, risks)
+
+            # Обновляем prev_in_risk / prev_in_crosswalk в треках
+            update_track_zone_state(tracker, tracked)
+
+            # Считаем события кадра
+            last_events = compute_frame_events(frame_idx, tracked)
+
+            # Рисуем только объекты, попавшие в ROI
+            for td in tracked:
+                if td.in_crosswalk or td.in_risk:
+                    draw_tracked(vis, td)
+
+        # ---------------------------------- ОТРИСОВКА ----------------------------------
         if show_roi:
             show_roi_polygons(frame=vis, crosswalks=crosswalks, risks=risks)
 
-        cv2.putText(vis, "ESC/Q - exit | R - ROI | SPACE - pause", (20, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        draw_events(vis, last_events)
 
-        cv2.imshow("Detections with ROIs", vis)
+        cv2.putText(vis, "ESC/Q - exit | R - ROI | SPACE - pause",
+                    (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-        # Клавиши управления. q - выход, r - отрисовка ROI, space - пауза
+        cv2.imshow("Road Safety Detection", vis)
+
         key = cv2.waitKey(0 if pause else delay_ms) & 0xFF
         if key in (27, ord("q"), ord("Q")):
             break
@@ -141,6 +169,154 @@ def main(roi_dir, clips_dir, clip_name):
 if __name__ == "__main__":
     clip_name = input("Введите название клипа (пример: vid_001_0000): ").strip()
     main(roi_dir=ROIS_DIR, clips_dir=CLIPS_DIR, clip_name=clip_name)
+
+
+# OLD CODE (DEPRICATED)
+
+
+# # ----------------------- ИМПОРТ БИБЛИОТЕК ПУТЕЙ И ОС -----------------------
+# import os
+# from utils.paths import MODELS_DIR, ROIS_DIR, CLIPS_DIR, roi_check, clip_check
+#
+# os.environ["TORCH_HOME"] = str(MODELS_DIR) # Дефолтная директория для моделей
+#
+# # ----------------------- ОСТАЛЬНЫЕ БИБЛИОТЕКИ -----------------------
+# import threading
+#
+# from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
+# import torch
+#
+# from roi_handler.roi_loader import load_roi
+# from utils.drawing_handler import show_roi_polygons, draw
+# from detector.detection_methods import *
+#
+# # ----------------------- КОНСТАНТЫ -----------------------
+# COCO = {
+#     1: "person",
+#     3: "car",
+#     4: "motorcycle",
+#     6: "bus",
+#     8: "truck",
+# }
+#
+# SCORE_THRESH = 0.8
+# EVERY = 4
+# MAX_STALE_SEC = 1.0
+#
+#
+# # ----------------------- MAIN функция -----------------------
+# def main(roi_dir, clips_dir, clip_name):
+#
+#     # ---------------------------------- МОДЕЛЬ И НАСТРОЙКА ----------------------------------
+#     device = "cuda" if torch.cuda.is_available() else "cpu"
+#     torch.backends.cudnn.benchmark = True
+#
+#     model = fasterrcnn_resnet50_fpn_v2(weights="DEFAULT")
+#     model.to(device).eval()
+#
+# # ---------------------------------- ПРОВЕРКА ПУТЕЙ И ЛОКАЛЬНЫЕ ПЕРЕМЕННЫЕ ----------------------------------
+#     clip_path = clip_check(clips_dir=clips_dir, clip_name=clip_name)
+#     roi_path = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
+#
+#     roi_data = load_roi(roi_json_path=roi_path)
+#
+#     # Если существует, то создаем переменные с координатами пешеходного перехода (crosswalk) и дороги (risk)
+#     crosswalks = roi_data["crosswalks"]
+#     risks = roi_data["risks"]
+#
+#     show_roi = False
+#     pause = False
+#     frozen = None
+#
+#     frame_idx = 0
+#     frame = None
+#
+# # ---------------------------------- ПОТОК ИНФЕРЕНСА ----------------------------------
+#     shared = {
+#         "req_id": -1,
+#         "req_frame": None,
+#         "detections": [],
+#         "detections_ts": 0.0,
+#         "detections_id": -1,
+#     }
+#     lock = threading.Lock()
+#     stop_event = threading.Event()
+#
+#     t = threading.Thread(target=infer_loop, args=(model, device, shared, lock, stop_event, COCO, SCORE_THRESH), daemon=True)
+#     t.start()
+#
+# # ---------------------------------- РАБОТА С ВИДЕО ----------------------------------
+#     cap = cv2.VideoCapture(clip_path) # ВОЗМОЖНО ЛУЧШЕ ОТКРЫВАТЬ ЧЕРЕЗ СТРОКУ?
+#     if not cap.isOpened():
+#         stop_event.set()
+#         raise RuntimeError("Не могу открыть видео: {}".format(clip_path))
+#
+#     # Синхронизация показа по FPS, чтобы видео не "ускорялось"
+#     fps = cap.get(cv2.CAP_PROP_FPS)
+#     delay_ms = int(1000 / fps) if fps and fps > 1 else 16
+#
+#
+#     while True:
+#         if not pause:
+#             ok, frame = cap.read()
+#             if not ok:
+#                 break
+#             frame_idx += 1
+#
+#             if frame_idx % EVERY == 0:
+#                 with lock:
+#                     shared["req_id"] = frame_idx
+#                     shared["req_frame"] = frame.copy()
+#
+#             base = frame
+#             frozen = None
+#         else:
+#             if frozen is None and frame is not None:
+#                 frozen = frame.copy()
+#             base = frozen if frozen is not None else frame
+#
+#         if base is None:
+#             break
+#
+#         vis = base.copy()
+#
+#         now = time.monotonic()
+#         with lock:
+#             detections = list(shared.get("detections", []))
+#             det_ts = float(shared.get("detections_ts", 0.0))
+#
+#         if detections and (pause or (now - det_ts) <= MAX_STALE_SEC):
+#             # Фильтр по ROI
+#             dets_roi = [d for d in detections if det_in_roi(d, crosswalks, risks)]
+#
+#             for d in dets_roi:
+#                 draw(vis, d)
+#
+#         if show_roi:
+#             show_roi_polygons(frame=vis, crosswalks=crosswalks, risks=risks)
+#
+#         cv2.putText(vis, "ESC/Q - exit | R - ROI | SPACE - pause", (20, 30),
+#                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+#
+#         cv2.imshow("Detections with ROIs", vis)
+#
+#         # Клавиши управления. q - выход, r - отрисовка ROI, space - пауза
+#         key = cv2.waitKey(0 if pause else delay_ms) & 0xFF
+#         if key in (27, ord("q"), ord("Q")):
+#             break
+#         if key in (ord("r"), ord("R")):
+#             show_roi = not show_roi
+#         if key == ord(" "):
+#             pause = not pause
+#
+#     stop_event.set()
+#     cap.release()
+#     cv2.destroyAllWindows()
+#
+#
+# if __name__ == "__main__":
+#     clip_name = input("Введите название клипа (пример: vid_001_0000): ").strip()
+#     main(roi_dir=ROIS_DIR, clips_dir=CLIPS_DIR, clip_name=clip_name)
 
 
 # DEPRICATED

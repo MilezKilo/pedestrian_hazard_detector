@@ -89,31 +89,3 @@ def clip_check(clips_dir: Path, clip_name: str):
         raise FileNotFoundError(f'Клип не найден {clip_path}')
 
     return clip_path # path type
-
-
-
-# DEPRICATED
-# def paths_check(roi_dir, clips_dir, clip_id):
-#     if not clips_dir.exists():
-#         raise FileNotFoundError(f"Директория с клипами не найдена: {clips_dir}")
-#
-#     # Получаем путь к клипу
-#     clip_path = str(clips_dir / clip_id) + '.mp4'
-#
-#     # Проверка существует ли клип
-#     if not Path(clip_path).is_file():
-#         raise FileNotFoundError(f'Клип не найден {clip_path}')
-#
-#     # Проверка существует ли папка с ROI
-#     if not roi_dir.exists():
-#         raise FileNotFoundError(f"Директория с ROI не найдена: {roi_dir}")
-#
-#     # Если существует, то создаем переменную с ROI
-#     roi_id = clip_id[:-5]
-#     roi_path = str(roi_dir / roi_id) + '.json'
-#
-#     # Проверка существует ли ROI
-#     if not Path(roi_path).is_file():
-#         raise FileNotFoundError(f"JSON файл с ROI не найден {roi_path}")
-#
-#     return clip_path, roi_path
