@@ -101,7 +101,7 @@ class TrackState:
 
 
 class TrackedDetection:
-    """Хранение исходной детекции с привязкой к треку"""
+    """Хранение исходной детекции с привязкой к треку (Транспорт/Пешеход)"""
     def __init__(self, track_id, det, category):
         self.track_id  = track_id
         self.det       = det
@@ -125,6 +125,7 @@ class TrackedDetection:
 class FrameEvents:
     """
     Результат детекции по кадру
+
     """
     frame_idx : int
     ped_on_crosswalk: bool # Есть ли человек на пешеходном переходе
@@ -132,11 +133,21 @@ class FrameEvents:
     ped_entered_road_ids: list = field(default_factory=list) # какие track_id вошли в risk на этом кадре
     vehicle_present: bool = False # Есть ли транспорт в кадре
     danger_same_zone: bool = False # Человек и транспорт в одной из зон одновременно
-    danger_ped_crosswalk_vehicle_risk: bool = False #
+    danger_ped_crosswalk_vehicle_risk: bool = False # Пешеход на переходе и транспорт на дороге одновременно
 
 
 
 class SimpleIoUTracker:
+    """
+    Простой трекер объектов на основе IoU.
+
+    Сопоставляет детекции между кадрами по перекрытию боксов (IoU),
+    присваивает каждому объекту постоянный track_id и удаляет
+    треки, которые не обновлялись дольше max_age кадров.
+
+    :param iou_thresh: Минимальный IoU для сопоставления детекции с треком
+    :param max_age:    Количество кадров до удаления неактивного трека
+    """
     def __init__(self, iou_thresh=0.30, max_age=25):
         self.iou_thresh = float(iou_thresh)
         self.max_age = int(max_age)
@@ -230,7 +241,7 @@ class SimpleIoUTracker:
 
 def annotate_zones(tracked, crosswalks, risks):
     """
-    :param tracked
+    :param tracked задетектированные пешеходы и транспорт
     :param crosswalks: список полигонов (каждый poly: (N,1,2))
     :param risks: список полигонов
     """
@@ -255,6 +266,16 @@ def annotate_zones(tracked, crosswalks, risks):
 
 
 def update_track_zone_state(tracker, tracked):
+    """
+        Обновляет флаги entered_risk и entered_crosswalk для каждого объекта.
+
+        Сравнивает текущее положение объекта с предыдущим кадром —
+        если объект только что вошёл в зону, выставляет флаг входа.
+        Затем сохраняет текущее состояние в трек для следующего кадра.
+
+        :param tracker: SimpleIoUTracker с историей треков
+        :param tracked: Список TrackedDetection текущего кадра
+        """
     for t in tracked:
         st = tracker.tracks.get(t.track_id)
         if st is None:
@@ -268,6 +289,16 @@ def update_track_zone_state(tracker, tracked):
 
 
 def compute_frame_events(frame_idx, tracked):
+    """
+    Вычисляет события безопасности для текущего кадра.
+
+    Анализирует положение всех объектов в зонах и возвращает
+    структуру FrameEvents с флагами активных событий.
+
+    :param frame_idx: Индекс текущего кадра
+    :param tracked:   Список TrackedDetection с проставленными зонами
+    :return:          FrameEvents с результатами анализа кадра
+    """
     peds = [t for t in tracked if t.category == "person"]
     vehs = [t for t in tracked if t.category == "vehicle"]
 
@@ -275,7 +306,7 @@ def compute_frame_events(frame_idx, tracked):
     ped_on_road = any((t.in_risk and not t.in_crosswalk) for t in peds)
     ped_entered_road_ids = [t.track_id for t in peds if t.entered_risk]
 
-    vehicle_present = (len(vehs) > 0)
+    vehicle_present = any(t.in_risk or t.in_crosswalk for t in vehs)
 
     danger_same_zone = (
         (any(t.in_risk for t in peds) and any(t.in_risk for t in vehs))

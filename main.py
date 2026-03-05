@@ -57,7 +57,7 @@ def main(roi_dir, clips_dir, clip_name):
     # ---------------------------------- ТРЕКЕР ----------------------------------
     tracker = SimpleIoUTracker(iou_thresh=0.30, max_age=25)
 
-    # ---------------------------------- ОБЩИЙ СОСТОЯНИЕ ПОТОКОВ ----------------------------------
+    # ---------------------------------- ОБЩЕЕ СОСТОЯНИЕ ПОТОКОВ ----------------------------------
     shared = {
         "req_id":        -1,
         "req_frame":     None,
@@ -141,6 +141,8 @@ def main(roi_dir, clips_dir, clip_name):
             for td in tracked:
                 if td.in_crosswalk or td.in_risk:
                     draw_tracked(vis, td)
+        else:
+            last_events = None
 
         # ---------------------------------- ОТРИСОВКА ----------------------------------
         if show_roi:
