@@ -31,8 +31,8 @@ COCO = {
     8: "truck",
 }
 
-SCORE_THRESH = 0.8
-EVERY        = 4          # Инференс каждые N кадров
+SCORE_THRESH = 0.6
+EVERY = 4          # Инференс каждые N кадров
 MAX_STALE_SEC = 1.0       # Максимальное время жизни старых детекций
 
 
@@ -48,25 +48,25 @@ def main(roi_dir, clips_dir, clip_name):
 
     # ---------------------------------- ПРОВЕРКА ПУТЕЙ ----------------------------------
     clip_path = clip_check(clips_dir=clips_dir, clip_name=clip_name)
-    roi_path  = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
-    roi_data  = load_roi(roi_json_path=roi_path)
+    roi_path = roi_check(roi_dir=roi_dir, return_roi_path=True, clip_name=clip_name)
+    roi_data = load_roi(roi_json_path=roi_path)
 
     crosswalks = roi_data["crosswalks"]
-    risks      = roi_data["risks"]
+    risks = roi_data["risks"]
 
     # ---------------------------------- ТРЕКЕР ----------------------------------
     tracker = SimpleIoUTracker(iou_thresh=0.30, max_age=25)
 
     # ---------------------------------- ОБЩЕЕ СОСТОЯНИЕ ПОТОКОВ ----------------------------------
     shared = {
-        "req_id":        -1,
-        "req_frame":     None,
-        "detections":    [],
+        "req_id": -1,
+        "req_frame": None,
+        "detections": [],
         "detections_ts": 0.0,
         "detections_id": -1,
     }
-    lock        = threading.Lock()
-    stop_event  = threading.Event()
+    lock = threading.Lock()
+    stop_event = threading.Event()
 
     t = threading.Thread(
         target=infer_loop,

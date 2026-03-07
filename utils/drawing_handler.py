@@ -1,12 +1,35 @@
 # ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
 import cv2
-
+from PIL import ImageFont, ImageDraw, Image
+import numpy as np
+from utils.paths import FONT_PATH
 
 # ----------------------- КОНСТАНТЫ ЦВЕТОВ -----------------------
 GREEN_COLOR  = (0, 255, 0)
 RED_COLOR    = (0, 0, 255)
 ORANGE_COLOR = (0, 165, 255)
 WHITE_COLOR  = (255, 255, 255) # НЕ ИСПОЛЬЗУЕТСЯ НА ДАННЫЙ МОМЕНТ
+
+
+def put_text_cyrillic(frame, text, pos, font_path, font_size, color):
+    """
+    Отрисовка текста с поддержкой кириллицы через Pillow.
+
+    :param frame: Кадр OpenCV (BGR)
+    :param text: Текст для отрисовки
+    :param pos: Позиция (x, y)
+    :param font_path: Путь к .ttf шрифту
+    :param font_size: Размер шрифта
+    :param color: Цвет BGR
+    """
+    img_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(img_pil)
+    font = ImageFont.truetype(font_path, font_size)
+
+    # Pillow использует RGB, а не BGR
+    rgb_color = (color[2], color[1], color[0])
+    draw.text(pos, text, font=font, fill=rgb_color)
+    frame[:] = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
 
 # ----------------------- ОТРИСОВКА ROI -----------------------
@@ -57,57 +80,64 @@ def draw_tracked(frame, tracked_det):
 def draw_events(frame, events):
     """
     Отрисовывает плашку событий в правом верхнем углу кадра.
-
-    Подсвечивает опасные ситуации.
+    Обычные события — оранжевым снизу, опасные — красным сверху.
 
     :param frame: Кадр для отрисовки
-    :param events Текущие активные события
+    :param events: Текущие активные события
     """
     if events is None:
         return
 
-    # ----------------------- ЛОКАЛЬНЫЕ КОНСТАНТЫ -----------------------
-    font       = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.65
-    thickness  = 2
-    padding    = 8
-    line_h     = 28
+    normal = []
+    danger = []
 
-    w = frame.shape[1]
-    lines = []
-
-    # ----------------------- ОПИСАНИЕ СОБЫТИЙ НА ЭКРАНЕ -----------------------
+    # -------- Обычные события --------
     if events.ped_on_crosswalk:
-        lines.append(("PED ON CROSSWALK", ORANGE_COLOR))
+        normal.append("Пешеход на переходе")
     if events.ped_on_road:
-        lines.append(("PED ON ROAD", ORANGE_COLOR))
-    if events.ped_entered_road_ids:
-        ids = ",".join(str(i) for i in events.ped_entered_road_ids)
-        lines.append((f"PED ENTERED ROAD: #{ids}", ORANGE_COLOR))
+        normal.append("Пешеход на дороге")
+    # if events.ped_entered_road_ids:
+    #     ids = ",".join(str(i) for i in events.ped_entered_road_ids)
+    #     normal.append(f"Пешеход вошёл в зону: #{ids}")
     if events.vehicle_present:
-        lines.append(("VEHICLE IN ZONE", RED_COLOR))
-    if events.danger_same_zone:
-        lines.append(("!! DANGER: PED+VEH SAME ZONE !!", RED_COLOR))
-    if events.danger_ped_crosswalk_vehicle_risk:
-        lines.append(("!! DANGER: PED CROSSWALK + VEH ROAD !!", RED_COLOR))
+        normal.append("Транспорт обнаружен")
 
-    if not lines:
+    # -------- Опасные события --------
+    if events.danger_same_zone:
+        danger.append("ОПАСНОСТЬ: Пешеход и транспорт на дороге")
+    if events.danger_ped_crosswalk_vehicle_risk:
+        danger.append("ОПАСНОСТЬ: Пешеход и транспорт на переходе")
+
+    if not normal and not danger:
         return
 
-    box_w = max(cv2.getTextSize(t, font, font_scale, thickness)[0][0] for t, _ in lines) + padding * 2
-    box_h = line_h * len(lines) + padding
+    padding = 8
+    line_h = 28
+
+    w = frame.shape[1]
+    all_lines = danger + normal  # опасные сверху
+    all_colors = [RED_COLOR] * len(danger) + [ORANGE_COLOR] * len(normal)
+
+    box_w = 550
+    box_h = line_h * len(all_lines) + padding
 
     x0 = w - box_w - 10
     y0 = 10
 
-    # Полупрозрачный фон
+    # Разделяем фон: красный для опасных, тёмный для обычных
     overlay = frame.copy()
-    cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (30, 30, 30), -1)
+    if danger:
+        danger_h = line_h * len(danger) + padding // 2
+        cv2.rectangle(overlay, (x0, y0+20), (x0 + box_w, y0 + danger_h+20), (0, 0, 60), -1)
+        cv2.rectangle(overlay, (x0, y0 + danger_h+20), (x0 + box_w, y0 + box_h+20), (60, 60, 60), -1)
+    else:
+        cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (30, 30, 30), -1)
+
     cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
-    for i, (text, color) in enumerate(lines):
+    for i, (text, color) in enumerate(zip(all_lines, all_colors)):
         ty = y0 + padding + line_h * i + 18
-        cv2.putText(frame, text, (x0 + padding, ty), font, font_scale, color, thickness)
+        put_text_cyrillic(frame, text, (x0 + padding, ty), FONT_PATH, 22, color)
 
 
 

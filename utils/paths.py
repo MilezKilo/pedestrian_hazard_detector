@@ -15,6 +15,9 @@ ROIS_DIR = DATA_DIR / "rois"
 # Директория с моделями НН
 MODELS_DIR = PROJECT_ROOT / "detector" / 'models'
 
+# Шрифты
+FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+
 # Регулярное выражение (т.е. шаблон поиска)
 CLIP_SUFFIX_RE = re.compile(r"_\d{4}$")
 
