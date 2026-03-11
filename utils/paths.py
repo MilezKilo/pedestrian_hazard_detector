@@ -6,11 +6,12 @@ import re
 # Корневая директория проекта
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Директория с данными (Клипы, видео, ROI)
+# Директория с данными (Клипы, видео, ROI, логи)
 DATA_DIR = PROJECT_ROOT / "data"
 CLIPS_DIR = DATA_DIR / "video_clips"
 RAW_VID_DIR = DATA_DIR / 'video_raw'
 ROIS_DIR = DATA_DIR / "rois"
+LOGS_DIR = DATA_DIR / "csv_logs"
 
 # Директория с моделями НН
 MODELS_DIR = PROJECT_ROOT / "detector" / 'models'
@@ -92,3 +93,26 @@ def clip_check(clips_dir: Path, clip_name: str):
         raise FileNotFoundError(f'Клип не найден {clip_path}')
 
     return clip_path # path type
+
+
+def logger_check(logger_dir: Path, logger_type: str='object'):
+    """
+    Проверка путей к директории с логами
+
+    :param logger_dir: Сама директория
+    :param logger_type: Тип логгера (Объект/Эвент)
+    """
+    if not logger_dir.exists():
+        raise FileNotFoundError(f"Директория с логами не найдена: {logger_dir}")
+
+    logs = None
+
+    if logger_type == 'object':
+        logs = logger_dir / 'objects_logs'
+    elif logger_type == 'event':
+        logs = logger_dir / 'events_logs'
+
+    if logs is None:
+        raise ValueError(f"Неизвестный тип логгера: {logger_type}")
+
+    return logs

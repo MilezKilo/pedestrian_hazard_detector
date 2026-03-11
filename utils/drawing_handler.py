@@ -8,9 +8,9 @@ from utils.paths import FONT_PATH
 GREEN_COLOR  = (0, 255, 0)
 RED_COLOR    = (0, 0, 255)
 ORANGE_COLOR = (0, 165, 255)
-WHITE_COLOR  = (255, 255, 255) # НЕ ИСПОЛЬЗУЕТСЯ НА ДАННЫЙ МОМЕНТ
 
 
+# ----------------------- ОТОБРАЖЕНИЕ КИРИЛЛИЦЫ НА ЭКРАНЕ -----------------------
 def put_text_cyrillic(frame, text, pos, font_path, font_size, color):
     """
     Отрисовка текста с поддержкой кириллицы через Pillow.
@@ -96,17 +96,12 @@ def draw_events(frame, events):
         normal.append("Пешеход на переходе")
     if events.ped_on_road:
         normal.append("Пешеход на дороге")
-    # if events.ped_entered_road_ids:
-    #     ids = ",".join(str(i) for i in events.ped_entered_road_ids)
-    #     normal.append(f"Пешеход вошёл в зону: #{ids}")
     if events.vehicle_present:
         normal.append("Транспорт обнаружен")
 
     # -------- Опасные события --------
     if events.danger_same_zone:
         danger.append("ОПАСНОСТЬ: Пешеход и транспорт на дороге")
-    if events.danger_ped_crosswalk_vehicle_risk:
-        danger.append("ОПАСНОСТЬ: Пешеход и транспорт на переходе")
 
     if not normal and not danger:
         return
@@ -131,65 +126,10 @@ def draw_events(frame, events):
         cv2.rectangle(overlay, (x0, y0+20), (x0 + box_w, y0 + danger_h+20), (0, 0, 60), -1)
         cv2.rectangle(overlay, (x0, y0 + danger_h+20), (x0 + box_w, y0 + box_h+20), (60, 60, 60), -1)
     else:
-        cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (30, 30, 30), -1)
+        cv2.rectangle(overlay, (x0, y0+20), (x0 + box_w, y0 + box_h+20), (60, 60, 60), -1)
 
     cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
     for i, (text, color) in enumerate(zip(all_lines, all_colors)):
         ty = y0 + padding + line_h * i + 18
         put_text_cyrillic(frame, text, (x0 + padding, ty), FONT_PATH, 22, color)
-
-
-
-# OLD CODE (DEPRICATED)
-# # ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
-# import cv2
-#
-# # ----------------------- ФУНКЦИИ -----------------------
-# def show_roi_polygons(frame, crosswalks, risks):
-#     """
-#     Функция отрисовки областей интересов
-#
-#     :param frame: Кадр для отрисовки
-#     :param crosswalks: Области пешеходных пероеходов
-#     :param risks: Области опасных зон
-#     """
-#     # crosswalks и risks — списки полигонов (каждый полигон: (N,1,2))
-#     for poly in crosswalks:
-#         cv2.polylines(frame, [poly], True, (0, 255, 0), 2)
-#
-#     for poly in risks:
-#         cv2.polylines(frame, [poly], True, (0, 0, 255), 2)
-#
-#
-# def draw(frame, det):
-#     """
-#     Рисует на кадре 1 детекцию
-#
-#     :param frame: Кадр для отрисовки
-#     :param det: Обнаруженный объект
-#     """
-#     label, score, (x1, y1, x2, y2) = det
-#     color = (0, 255, 0) if label == "person" else (0, 0, 255)
-#     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-#     cv2.putText(frame, f"{label}:{score:.2f}", (x1, max(20, y1 - 7)),
-#                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-# def draw(frame, det):
-#     """
-#     Рисует на кадре 1 детекцию
-#
-#     :param frame: Кадр для отрисовки
-#     :param det: Обнаруженный объект
-#     """
-#     # Поддержка обоих форматов
-#     if hasattr(det, "label"):
-#         label, score, (x1, y1, x2, y2) = det.label, det.score, det.bbox_xyxy
-#     else:
-#         label, score, (x1, y1, x2, y2) = det
-#
-#     color = COLOR_PERSON if label == "person" else COLOR_VEHICLE
-#     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-#     cv2.putText(frame, f"{label}:{score:.2f}", (x1, max(20, y1 - 7)),
-#                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-

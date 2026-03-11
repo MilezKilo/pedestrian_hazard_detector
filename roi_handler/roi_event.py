@@ -133,7 +133,6 @@ class FrameEvents:
     ped_entered_road_ids: list = field(default_factory=list) # какие track_id вошли в risk на этом кадре
     vehicle_present: bool = False # Есть ли транспорт в кадре
     danger_same_zone: bool = False # Человек и транспорт в одной из зон одновременно
-    danger_ped_crosswalk_vehicle_risk: bool = False # Пешеход на переходе и транспорт на дороге одновременно
 
 
 
@@ -313,7 +312,6 @@ def compute_frame_events(frame_idx, tracked):
         or (any(t.in_crosswalk for t in peds) and any(t.in_crosswalk for t in vehs))
     )
 
-    danger_ped_crosswalk_vehicle_risk = (any(t.in_crosswalk for t in peds) and any(t.in_risk for t in vehs))
 
     return FrameEvents(
         frame_idx=frame_idx,
@@ -322,31 +320,4 @@ def compute_frame_events(frame_idx, tracked):
         ped_entered_road_ids=ped_entered_road_ids,
         vehicle_present=vehicle_present,
         danger_same_zone=danger_same_zone,
-        danger_ped_crosswalk_vehicle_risk=danger_ped_crosswalk_vehicle_risk,
     )
-
-
-# OLD CODE (DEPRICATED)
-# class TrackedDetection:
-#     """
-#     Хранение исходной детекции
-#     """
-#     def __init__(self, track_id, det, category, anchor_xy):
-#         self.track_id = track_id
-#         self.det = det
-#         self.category = category
-#         self.anchor_xy = anchor_xy
-#
-#         # Якорная точка (низ-центр бокса)
-#         x1, y1, x2, y2 = det.bbox_xyxy
-#         self.anchor_xy = ((x1 + x2) // 2, y2)
-#
-#         self.crosswalk_idx = -1
-#         self.risk_idx = -1
-#
-#         self.in_crosswalk = False
-#         self.in_risk = False
-#         self.zone = "none"  # crosswalk | road | none
-#
-#         self.entered_risk = False
-#         self.entered_crosswalk = False
