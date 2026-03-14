@@ -23,6 +23,20 @@ FONT_PATH = "C:/Windows/Fonts/arial.ttf"
 CLIP_SUFFIX_RE = re.compile(r"_\d{4}$")
 
 
+def dirs_maker():
+    """
+    При первичной настройке создает отсутствующие папки.
+
+    """
+    for directory in [CLIPS_DIR,
+                      RAW_VID_DIR,
+                      ROIS_DIR,
+                      LOGS_DIR,
+                      LOGS_DIR / 'events_logs',
+                      LOGS_DIR / 'objects_logs']:
+        directory.mkdir(parents=True, exist_ok=True)
+
+
 def roi_from_clip(clip_name):
     """
     Ищет и убирает лишние символы
@@ -116,3 +130,8 @@ def logger_check(logger_dir: Path, logger_type: str='object'):
         raise ValueError(f"Неизвестный тип логгера: {logger_type}")
 
     return logs
+
+
+# Запускать при первичной настройке.
+if __name__ == 'main':
+    dirs_maker()

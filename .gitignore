@@ -2,7 +2,7 @@
 /data/video_clips/
 /data/video_raw/
 
-/detector/models/
+/detector/models/hub/
 
 __pycache__/
 
