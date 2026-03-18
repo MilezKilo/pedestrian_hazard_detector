@@ -96,8 +96,8 @@ class TrackState:
     category: str
     bbox_xyxy: tuple
     last_seen_frame: int
-    prev_in_risk = False
-    prev_in_crosswalk = False
+    prev_in_risk: bool = False
+    prev_in_crosswalk: bool = False
 
 
 class TrackedDetection:
@@ -223,10 +223,10 @@ class SimpleIoUTracker:
 
         out = []
         for i, d in enumerate(detections):
-            tid = assigned_det_to_track.get(i)
-            if tid is None:
-                tid = self._new_id()
-                self._tracks[tid] = TrackState(tid, category_of_label(d.label), d.bbox_xyxy, frame_idx)
+            tid = assigned_det_to_track[i] #.get(i)
+            # if tid is None:
+            #     tid = self._new_id()
+            #     self._tracks[tid] = TrackState(tid, category_of_label(d.label), d.bbox_xyxy, frame_idx)
 
             out.append(
                 TrackedDetection(

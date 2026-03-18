@@ -96,7 +96,7 @@ def main(roi_dir, clips_dir, clip_name,
     t.start()
 
     # ---------------------------------- РАБОТА С ВИДЕО ----------------------------------
-    cap = cv2.VideoCapture(clip_path)
+    cap = cv2.VideoCapture(str(clip_path))
     if not cap.isOpened():
         stop_event.set()
         raise RuntimeError(f"Не могу открыть видео: {clip_path}")
@@ -121,85 +121,86 @@ def main(roi_dir, clips_dir, clip_name,
                                 )
 
     # ---------------------------------- ГЛАВНЫЙ ЦИКЛ ----------------------------------
-    while True:
-        if not pause:
-            ok, frame = cap.read()
-            if not ok:
+    try:
+        while True:
+            if not pause:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                frame_idx += 1
+
+                # Каждые EVERY кадров — отправляем на инференс
+                if frame_idx % EVERY == 0:
+                    with lock:
+                        shared["req_id"]    = frame_idx
+                        shared["req_frame"] = frame.copy()
+
+                base   = frame
+                frozen = None
+            else:
+                if frozen is None and frame is not None:
+                    frozen = frame.copy()
+                base = frozen if frozen is not None else frame
+
+            if base is None:
                 break
-            frame_idx += 1
 
-            # Каждые EVERY кадров — отправляем на инференс
-            if frame_idx % EVERY == 0:
-                with lock:
-                    shared["req_id"]    = frame_idx
-                    shared["req_frame"] = frame.copy()
+            vis = base.copy()
+            now = time.monotonic()
 
-            base   = frame
-            frozen = None
-        else:
-            if frozen is None and frame is not None:
-                frozen = frame.copy()
-            base = frozen if frozen is not None else frame
+            with lock:
+                detections = list(shared.get("detections", []))
+                det_ts     = float(shared.get("detections_ts", 0.0))
 
-        if base is None:
-            break
+            # ---------------------------------- ТРЕКИНГ И СОБЫТИЯ ----------------------------------
+            if detections and (pause or (now - det_ts) <= MAX_STALE_SEC):
 
-        vis = base.copy()
-        now = time.monotonic()
+                # Обновляем трекер — получаем TrackedDetection для каждого объекта
+                tracked = tracker.update(detections, frame_idx)
 
-        with lock:
-            detections = list(shared.get("detections", []))
-            det_ts     = float(shared.get("detections_ts", 0.0))
+                # Проставляем зоны каждому объекту
+                annotate_zones(tracked, crosswalks, risks)
 
-        # ---------------------------------- ТРЕКИНГ И СОБЫТИЯ ----------------------------------
-        if detections and (pause or (now - det_ts) <= MAX_STALE_SEC):
+                # Обновляем prev_in_risk / prev_in_crosswalk в треках
+                update_track_zone_state(tracker, tracked)
 
-            # Обновляем трекер — получаем TrackedDetection для каждого объекта
-            tracked = tracker.update(detections, frame_idx)
+                # Считаем события кадра
+                last_events = compute_frame_events(frame_idx, tracked)
+                if logging_enable:
+                    logger.log(tracked, last_events)
 
-            # Проставляем зоны каждому объекту
-            annotate_zones(tracked, crosswalks, risks)
+                # Рисуем только объекты, попавшие в ROI
+                for td in tracked:
+                    if td.in_crosswalk or td.in_risk:
+                        draw_tracked(vis, td)
+            else:
+                last_events = None
 
-            # Обновляем prev_in_risk / prev_in_crosswalk в треках
-            update_track_zone_state(tracker, tracked)
+            # ---------------------------------- ОТРИСОВКА ----------------------------------
+            if show_vid:
+                if show_roi:
+                    show_roi_polygons(frame=vis, crosswalks=crosswalks, risks=risks)
 
-            # Считаем события кадра
-            last_events = compute_frame_events(frame_idx, tracked)
-            if logging_enable:
-                logger.log(tracked, last_events)
+                draw_events(vis, last_events)
 
-            # Рисуем только объекты, попавшие в ROI
-            for td in tracked:
-                if td.in_crosswalk or td.in_risk:
-                    draw_tracked(vis, td)
-        else:
-            last_events = None
+                cv2.putText(vis, "ESC/Q - exit | R - ROI | SPACE - pause",
+                        (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-        # ---------------------------------- ОТРИСОВКА ----------------------------------
-        if show_vid:
-            if show_roi:
-                show_roi_polygons(frame=vis, crosswalks=crosswalks, risks=risks)
+                cv2.imshow("Road Safety Detection", vis)
 
-            draw_events(vis, last_events)
-
-            cv2.putText(vis, "ESC/Q - exit | R - ROI | SPACE - pause",
-                    (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-            cv2.imshow("Road Safety Detection", vis)
-
-            key = cv2.waitKey(0 if pause else delay_ms) & 0xFF
-            if key in (27, ord("q"), ord("Q")):
-                break
-            if key in (ord("r"), ord("R")):
-                show_roi = not show_roi
-            if key == ord(" "):
-                pause = not pause
-
-    stop_event.set()
-    if logging_enable:
-        logger.close()
-    cap.release()
-    cv2.destroyAllWindows()
+                key = cv2.waitKey(0 if pause else delay_ms) & 0xFF
+                if key in (27, ord("q"), ord("Q")):
+                    break
+                if key in (ord("r"), ord("R")):
+                    show_roi = not show_roi
+                if key == ord(" "):
+                    pause = not pause
+    finally:
+        stop_event.set()
+        if logging_enable:
+            logger.close()
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 def run_all(clips_dir):

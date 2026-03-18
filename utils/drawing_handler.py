@@ -9,6 +9,7 @@ GREEN_COLOR  = (0, 255, 0)
 RED_COLOR    = (0, 0, 255)
 ORANGE_COLOR = (0, 165, 255)
 
+_font_cache = {}
 
 # ----------------------- ОТОБРАЖЕНИЕ КИРИЛЛИЦЫ НА ЭКРАНЕ -----------------------
 def put_text_cyrillic(frame, text, pos, font_path, font_size, color):
@@ -24,7 +25,10 @@ def put_text_cyrillic(frame, text, pos, font_path, font_size, color):
     """
     img_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(img_pil)
-    font = ImageFont.truetype(font_path, font_size)
+    key = (font_path, font_size)
+    if key not in _font_cache:
+        _font_cache[key] = ImageFont.truetype(font_path, font_size)
+    font = _font_cache[key]
 
     # Pillow использует RGB, а не BGR
     rgb_color = (color[2], color[1], color[0])
@@ -133,3 +137,4 @@ def draw_events(frame, events):
     for i, (text, color) in enumerate(zip(all_lines, all_colors)):
         ty = y0 + padding + line_h * i + 18
         put_text_cyrillic(frame, text, (x0 + padding, ty), FONT_PATH, 22, color)
+

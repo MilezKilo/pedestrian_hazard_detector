@@ -1,0 +1,22 @@
+clip_name,gt_label,pred_label,result
+vid_000_0001,safe,safe,TN
+vid_000_0003,safe,safe,TN
+vid_000_0005,danger,danger,TP
+vid_000_0010,danger,danger,TP
+vid_001_0003,danger,danger,TP
+vid_001_0004,danger,danger,TP
+vid_002_0001,danger,danger,TP
+vid_002_0002,safe,safe,TN
+vid_002_0005,safe,safe,TN
+vid_002_0006,danger,danger,TP
+vid_003_0001,danger,danger,TP
+vid_004_0003,safe,safe,TN
+vid_004_0005,danger,danger,TP
+vid_004_0006,danger,danger,TP
+vid_004_0007,safe,safe,TN
+vid_005_0001,safe,safe,TN
+vid_005_0003,safe,safe,TN
+vid_005_0007,safe,safe,TN
+vid_005_0009,danger,danger,TP
+vid_005_0010,safe,safe,TN
+ИТОГО,TP=10 TN=10,FP=0 FN=0,Acc=1.0 F1=1.0

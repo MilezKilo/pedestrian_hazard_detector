@@ -1,4 +1,5 @@
-/data/csv_logs/
+/data/csv_logs/events_logs
+/data/csv_logs/objects_logs
 /data/video_clips/
 /data/video_raw/
 

@@ -1,6 +1,7 @@
 # ----------------------- ИМПОРТ БИБЛИОТЕК -----------------------
 from pathlib import Path
 import re
+import platform
 
 # ----------------------- КОНСТАНТЫ -----------------------
 # Корневая директория проекта
@@ -12,12 +13,16 @@ CLIPS_DIR = DATA_DIR / "video_clips"
 RAW_VID_DIR = DATA_DIR / 'video_raw'
 ROIS_DIR = DATA_DIR / "rois"
 LOGS_DIR = DATA_DIR / "csv_logs"
+EVENTS_DIR = LOGS_DIR / 'events_logs'
+OBJECTS_DIR = LOGS_DIR / 'objects_logs'
+GT_DIR = LOGS_DIR / 'ground_truth'
+METRICS_DIR = LOGS_DIR / 'metrics'
 
 # Директория с моделями НН
 MODELS_DIR = PROJECT_ROOT / "detector" / 'models'
 
 # Шрифты
-FONT_PATH = "C:/Windows/Fonts/arial.ttf"
+FONT_PATH = 'C:/Windows/Fonts/arial.ttf' if platform.system() == 'Windows' else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 
 # Регулярное выражение (т.е. шаблон поиска)
 CLIP_SUFFIX_RE = re.compile(r"_\d{4}$")
@@ -32,8 +37,10 @@ def dirs_maker():
                       RAW_VID_DIR,
                       ROIS_DIR,
                       LOGS_DIR,
-                      LOGS_DIR / 'events_logs',
-                      LOGS_DIR / 'objects_logs']:
+                      EVENTS_DIR,
+                      GT_DIR,
+                      METRICS_DIR,
+                      OBJECTS_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -129,9 +136,10 @@ def logger_check(logger_dir: Path, logger_type: str='object'):
     if logs is None:
         raise ValueError(f"Неизвестный тип логгера: {logger_type}")
 
+    logs.mkdir(parents=True, exist_ok=True)
     return logs
 
 
 # Запускать при первичной настройке.
-if __name__ == 'main':
+if __name__ == '__main__':
     dirs_maker()
