@@ -112,7 +112,7 @@ def main(roi_dir, clips_dir, clip_name,
     last_events = None  # Последние события — показываем пока не устарели
 
     # ---------------------------------- ТРЕКЕР И ЛОГГЕР ----------------------------------
-    tracker = SimpleIoUTracker(iou_thresh=0.30, max_age=25)
+    tracker = SimpleIoUTracker(iou_thresh=0.50, max_age=25)
     if logging_enable:
         logger = DetectionCsvLogger(
                                 objs_path=objects_logs_path / f"{clip_name}_objs_dets.csv",

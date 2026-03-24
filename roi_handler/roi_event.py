@@ -35,7 +35,7 @@ def point_in_polygon(polygon: np.ndarray, x: int, y: int) -> bool:
     return pointPolygonTest(polygon, (float(x), float(y)), False) >= 0
 
 
-def anchor_point_xyxy(bbox_xyxy, mode="bottom_center"):
+def anchor_point_xyxy(bbox_xyxy, mode="bottom_center") -> int:
     """
     Определение где находится объект относительно ROI
 
